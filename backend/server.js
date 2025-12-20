@@ -1,10 +1,10 @@
 import express from "express";
-import multer from "multer";
-import fileUploadRoute from "./routes/fileUploadRoute.js";
+import hashAndUploadRoutes from "./routes/hashAndUploadRoutes.js";
 import { configDotenv } from "dotenv";
 configDotenv();
-const upload = multer();
 const app = express();
-app.use("/uploadFile", upload.single("file"), fileUploadRoute);
+app.use(express.json());
 
+app.use("/upload", hashAndUploadRoutes);
+app.use("/hash", hashAndUploadRoutes);
 app.listen(5000);

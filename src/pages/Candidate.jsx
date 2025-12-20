@@ -1,30 +1,22 @@
 import { useState } from "react";
 import { toast } from "react-toastify";
+import {
+  getResumeHash,
+  uploadFile,
+  uploadDataToBlockchain,
+} from "../services/api";
 import { ClipLoader } from "react-spinners";
-function Candidate() {
+
+const Candidate = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [resumeTitle, setResumeTitle] = useState("");
   const [files, setFiles] = useState([]);
   const [links, setLinks] = useState([""]);
   const [walletAddress, setWalletAddress] = useState(null);
   const [uploading, setUploading] = useState(false);
-
+  const [pinataFileData, setPinataFileData] = useState([]);
   const handleFileChange = (e) => {
     setFiles((prev) => [...prev, ...Array.from(e.target.files)]);
-  };
-
-  const uploadFile = async (file) => {
-    console.log(import.meta.env);
-    const formdata = new FormData();
-    formdata.append("file", file);
-    const uploadStatus = await fetch(`/api/uploadFile`, {
-      method: "POST",
-      body: formdata,
-    });
-
-    const assetData = await uploadStatus.json();
-    console.log(assetData);
-    // return CID;
   };
 
   const handleLinkChange = (index, value) => {
@@ -46,16 +38,23 @@ function Candidate() {
       toast.error("Please connect your wallet first");
       return;
     }
-
-    console.log(files);
-    // need the logic here to open the wallet and then connect with the blockchain
-    console.log({ resumeTitle, files, links });
-    const promises = files.map((file) => {
-      return uploadFile(file);
-    });
-
     setUploading(true);
-    await Promise.all(promises);
+
+    // so this fires all the calls at once and saves times
+    const proofs = await Promise.all(files.map((file) => uploadFile(file)));
+    setPinataFileData(proofs);
+    const resumeHashData = await getResumeHash(resumeTitle, walletAddress);
+
+    const compiledData = {
+      resumeHashData: resumeHashData,
+      proofs: proofs,
+    };
+
+    const uploadToBlockchain = await uploadDataToBlockchain(compiledData);
+
+    // hashof all the files, hash of the resume name as well with the id
+    // now need to use web3
+
     setUploading(false);
     setIsModalOpen(false);
     toast.success(`All files uploaded successfully`);
@@ -214,7 +213,7 @@ function Candidate() {
       )}
     </div>
   );
-}
+};
 
 export default Candidate;
 
