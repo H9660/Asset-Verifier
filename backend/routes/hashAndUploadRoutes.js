@@ -2,7 +2,12 @@ import express from "express";
 import pinata from "../config/pinata.js";
 import multer from "multer";
 const upload = multer();
-import { hashFile, getResumeHash } from "../utils/hashUtils.js";
+import {
+  hashFile,
+  getResumeHash,
+  normalizeResumeName,
+} from "../utils/hashUtils.js";
+import { addProof, addResume } from "../index.js";
 const router = express.Router();
 
 export const uploadFile = async (req, res) => {
@@ -50,7 +55,7 @@ export const hashResume = async (req, res) => {
     }
 
     const finalResumeHash = getResumeHash(resumeTitle, walletAddress);
-    const resumeId = resumeTitle;
+    const resumeId = getResumeHash(normalizeResumeName(resumeTitle), "");
     res.status(200).json({
       resumeHash: finalResumeHash,
       resumeId: resumeId,
@@ -61,21 +66,42 @@ export const hashResume = async (req, res) => {
 };
 
 export const uploadToBlockchain = async (req, res) => {
-  if (req.originalUrl !== "/upload/uploadToBlockchain") {
-    res.status(400).json({
-      error: "Invalid URL",
-    });
-    return;
-  }
+  try {
+    if (req.originalUrl !== "/upload/uploadToBlockchain") {
+      res.status(400).json({
+        error: "Invalid URL",
+      });
+      return;
+    }
 
-  if (!req.body) {
-    res.status(400).json({
-      error: "Invalid payload",
+    if (!req.body) {
+      res.status(400).json({
+        error: "Invalid payload",
+      });
+      return;
+    }
+    const resumeHashData = JSON.parse(req.body.resumeHashData);
+    const proofs = JSON.parse(req.body.proofs);
+    const uploadedProofs = await Promise.all(
+      proofs.map((proof) => addProof("0x" + proof.hash, proof.CID))
+    );
+
+    const proofsHashes = proofs.map((proof) => {
+      return "0x" + proof.hash;
     });
-    return;
+
+    const uploadedResume = await addResume(
+      "0x" + resumeHashData.resumeId,
+      "0x" + resumeHashData.resumeHash,
+      proofsHashes
+    );
+
+    res.status(200).send({
+      success: "Proofs deployed on the blockchain",
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
-  const resumeHashData = JSON.parse(req.body.resumeHashData);
-  const proofs = JSON.parse(req.body.proofs);
 };
 router.post("/uploadFile", upload.single("file"), uploadFile);
 router.post("/uploadToBlockchain", upload.none(), uploadToBlockchain);

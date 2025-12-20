@@ -1,9 +1,24 @@
 import Web3 from "web3";
-import web3 from "./config/web3.js";
-const wb3 = new Web3(`https://mainnet.infura.io/v3/${web3.infuraProjectId}`);
-async function getLatestBlockNumber() {
-  const blockNumber = await wb3.eth.getBlockNumber();
-  console.log("Latest block number:", blockNumber);
-}
+import { initContractInstance } from "./utils/web3Utils.js";
+const web3 = new Web3(new Web3.providers.HttpProvider(process.env.TEST));
 
-getLatestBlockNumber();
+const contractInstance = await initContractInstance();
+const accounts = await contractInstance.constructor.web3.eth.getAccounts();
+// VERY IMPORTANT POINT HERE:
+export const addProof = async (proofHash, CID) => {
+  const tx = await contractInstance.addProof(proofHash, CID, {
+    from: accounts[0],
+    gas: 3600000,
+  });
+
+  return tx;
+};
+
+export const addResume = async (resumeId, resumeHash, proofs) => {
+  const tx = await contractInstance.createResume(resumeId, resumeHash, proofs, {
+    from: accounts[0],
+    gas: 3600000,
+  });
+
+  return tx;
+};

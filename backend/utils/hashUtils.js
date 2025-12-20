@@ -1,9 +1,13 @@
-import { resumeRegex } from "../constants.js";
+// import { resumeRegex } from "../constants.js";
 import { Worker } from "worker_threads";
 import crypto from "crypto";
-import { generateNonce } from "./cryptoUtils.js";
+export const resumeRegexString = `^(?:(?:resume|cv)[-_ ]*)?(?<name>[a-z]+(?:[-_ ]+[a-z]+)*)?(?:[-_ ]*\\d*)?\\.pdf$`;
+
+const resumeRegex = new RegExp(resumeRegexString, "i");
+
 export const normalizeResumeName = (resumeName) => {
-  const match = resumeRegex.match(resumeName);
+  const match = resumeName.match(resumeRegex);
+  console.log(match);
   if (!match) {
     throw new Error("Invalid resume filename");
   }
@@ -16,7 +20,7 @@ export const normalizeResumeName = (resumeName) => {
   }
 
   // Normalize person name
-  return name.toLowerCase().trim().replace(/[_ ]+/g, "-") + ".pdf";
+  return name.toLowerCase().trim().replace(/[_ ]+/g, "-") + ".pdf" + Date.now();
 };
 
 export const hashFile = async (buffer) => {
