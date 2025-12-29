@@ -1,13 +1,19 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import {
-  getResumeHash,
+  getResumeId,
   uploadFile,
-  uploadDataToBlockchain,
+  saveTransactionsToDB,
+  getResumes,
 } from "../services/api";
+import ResumeBox from "../components/ResumeBox";
+import ResumeViewModal from "../components/ResumeViewModal";
+import { addProof, connectWallet } from "../services/web3";
 import { ClipLoader } from "react-spinners";
-
+import { toastSetup } from "../config/toastSetup";
 const Candidate = () => {
+  const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [resumeTitle, setResumeTitle] = useState("");
   const [files, setFiles] = useState([]);
@@ -15,6 +21,8 @@ const Candidate = () => {
   const [walletAddress, setWalletAddress] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [pinataFileData, setPinataFileData] = useState([]);
+  const [resumes, setResumes] = useState([]);
+  const [selectedResume, setSelectedResume] = useState(null);
   const handleFileChange = (e) => {
     setFiles((prev) => [...prev, ...Array.from(e.target.files)]);
   };
@@ -33,80 +41,186 @@ const Candidate = () => {
     setLinks((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const initWallet = async () => {
+    const connectionData = await connectWallet();
+    if (connectionData.success) {
+      setWalletAddress(connectionData.address);
+      toast.success("Metamask connected successfully", toastSetup);
+    } else toast.error(connectionData.error);
+  };
+
+  const fetchResumes = async () => {
+    toast.info("Fetching assets...", toastSetup);
+    const resumesStatus = await getResumes(walletAddress);
+
+    if (resumesStatus.success) {
+      if (resumesStatus.parsedResumes.resumes.length) {
+        toast.success("Assets fetched successfully!", toastSetup);
+        setResumes(resumesStatus.parsedResumes.resumes);
+      } else {
+        toast.error("No assests found. Please store some first.", toastSetup);
+      }
+    } else {
+      toast.error(resumesStatus.error, toastSetup);
+    }
+  };
+
   const handleCreateResume = async () => {
     if (!walletAddress) {
-      toast.error("Please connect your wallet first");
+      toast.error("Please connect your wallet first", toastSetup);
       return;
     }
-    setUploading(true);
 
-    // so this fires all the calls at once and saves times
-    const proofs = await Promise.all(files.map((file) => uploadFile(file)));
-    setPinataFileData(proofs);
-    const resumeHashData = await getResumeHash(resumeTitle, walletAddress);
+    if (!resumeTitle) {
+      toast.error("Please enter a title for the resume.", toastSetup);
+      return;
+    }
 
-    const compiledData = {
-      resumeHashData: resumeHashData,
-      proofs: proofs,
-    };
+    // console.log(files.length);
+    if (files.length == 0) {
+      toast.error("Please upload at least one file.", toastSetup);
+      return;
+    }
 
-    const uploadToBlockchain = await uploadDataToBlockchain(compiledData);
+    try {
+      setUploading(true);
+      // so this fires all the calls at once and saves times
+      const proofs = await Promise.all(files.map((file) => uploadFile(file)));
 
-    // hashof all the files, hash of the resume name as well with the id
-    // now need to use web3
+      setPinataFileData(proofs);
 
-    setUploading(false);
-    setIsModalOpen(false);
-    toast.success(`All files uploaded successfully`);
+      const resumeId = await getResumeId(resumeTitle, walletAddress);
+
+      const uploadData = proofs.map((proof) => {
+        return {
+          owner: walletAddress,
+          cid: proof.CID,
+          proofHash: "0x" + proof.hash,
+        };
+      });
+
+      toast.info("Uploading data on blockchain.", toastSetup);
+      const transactionStatus = await addProof(
+        walletAddress,
+        "0x" + resumeId,
+        uploadData
+      );
+      console.log(walletAddress);
+
+      if (transactionStatus.success) {
+        toast.success("All proofs uploaded to blockchain!", toastSetup);
+      } else {
+        toast.error(transactionStatus.error.message, toastSetup);
+        setUploading(false);
+        setIsModalOpen(false);
+        return;
+      }
+
+      toast.info("Saving transaction hash to the db", toastSetup);
+      const saveToDB = await saveTransactionsToDB({
+        walletAddress: walletAddress,
+        transactionData: {
+          transactionId: transactionStatus.transactionId,
+          resumeId: resumeId,
+        },
+      });
+
+      console.log(walletAddress);
+      if (saveToDB.success) {
+        console.log(saveToDB);
+        toast.success("Resume created successfully", toastSetup);
+      } else {
+        toast.error(saveToDB.error);
+      }
+      setUploading(false);
+      setIsModalOpen(false);
+    } catch (error) {
+      toast.error(error, toastSetup);
+    }
   };
+  useEffect(() => {
+    window.ethereum.on("disconnect", (error) => {
+      console.error("MetaMask disconnected:", error);
+      alert("MetaMask has disconnected. Please reload the page to reconnect.");
+      window.location.reload();
+    });
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      if (walletAddress) await fetchResumes();
+    })();
+  }, [files]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-10">
-      <div className="max-w-4xl mx-auto">
-        <div className="justify-flex">
-          <div className="flex items-center justify-between mb-8">
-            <h1 className="text-4xl font-bold text-slate-800">
-              Candidate Dashboard
-            </h1>
+      <div className="max-w-6xl mx-auto">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 px-8 py-6 mb-10">
+          <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+            {/* Title */}
+            <div>
+              <h1 className="text-4xl font-bold text-slate-800">
+                Candidate Dashboard
+              </h1>
+              {walletAddress && (
+                <p className="mt-1 text-sm text-slate-500">
+                  Wallet: {walletAddress.slice(0, 6)}...
+                  {walletAddress.slice(-4)}
+                </p>
+              )}
+            </div>
 
-            <div className="flex items-center gap-3">
+            {/* Actions */}
+            <div className="flex flex-wrap items-center gap-4">
               <button
                 onClick={() => setIsModalOpen(true)}
-                className="px-6 py-3 rounded-xl bg-slate-900 text-white font-medium shadow hover:bg-slate-800 transition"
+                className="px-7 py-3 rounded-xl bg-slate-900 text-white font-semibold shadow hover:bg-slate-800 transition"
               >
-                + Create Resume
+                + Store Asset
               </button>
 
               <button
-                onClick={async () => {
-                  if (window?.ethereum) {
-                    console.log(window.ethereum);
-                    try {
-                      const accounts = await window.ethereum.request({
-                        method: "eth_requestAccounts",
-                      });
-                      console.log("Connected:", accounts[0]); // this is the wallet addresss
-                      setWalletAddress(accounts[0]);
-                    } catch (err) {
-                      console.error("Wallet connection failed", err);
-                    }
-                  } else {
-                    alert(
-                      "No Ethereum wallet detected. Please install MetaMask."
-                    );
-                  }
-                }}
-                className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-800 font-medium shadow hover:bg-slate-50 transition"
+                onClick={initWallet}
+                className="px-5 py-3 rounded-xl border border-slate-300 bg-white text-slate-800 font-medium shadow-sm hover:bg-slate-50 transition"
               >
                 Connect Wallet
               </button>
+
+              <button
+                onClick={fetchResumes}
+                className="px-5 py-3 rounded-xl border border-slate-300 bg-white text-slate-800 font-medium shadow-sm hover:bg-slate-50 transition"
+              >
+                Fetch Assets
+              </button>
+
+              <button
+                onClick={() => navigate("/verify")}
+                className="px-5 py-3 rounded-xl border border-slate-300 bg-white text-slate-800 font-medium shadow-sm hover:bg-slate-50 transition"
+              >
+                Verify Asset
+              </button>
             </div>
           </div>
-          {walletAddress && <div>Your wallet addresss is ${walletAddress}</div>}
-          {/* removed duplicate Create Resume button to keep both actions on the same line */}
         </div>
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 text-slate-500">
-          <p>No resumes created yet. Create one to get started.</p>
+
+        <div className="space-y-4">
+          {resumes?.length > 0 ? (
+            resumes.map((resume) => {
+              console.log(walletAddress);
+              return (
+                <ResumeBox
+                  key={resume._id}
+                  resume={resume}
+                  walletAddress={walletAddress}
+                  onView={setSelectedResume}
+                />
+              );
+            })
+          ) : (
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 text-slate-500">
+              <p>No assets created yet. Create one to get started.</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -114,16 +228,16 @@ const Candidate = () => {
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center">
           <div className="bg-white w-full max-w-2xl rounded-2xl shadow-xl p-8">
             <h2 className="text-2xl font-semibold text-slate-800 mb-6">
-              Create Resume
+              Store Assets
             </h2>
 
             <div className="mb-6">
               <label className="block text-sm font-medium text-slate-700 mb-1">
-                Resume title
+                Asset name
               </label>
               <input
                 type="text"
-                placeholder="e.g. Backend Engineer Resume"
+                placeholder="Abstract Artwork by Hussain"
                 value={resumeTitle}
                 onChange={(e) => setResumeTitle(e.target.value)}
                 className="w-full rounded-lg border border-slate-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-slate-800"
@@ -134,18 +248,53 @@ const Candidate = () => {
               <label className="block text-sm font-medium text-slate-700 mb-2">
                 Upload files
               </label>
-              <div className="border-2 border-dashed border-slate-300 rounded-xl p-4 text-center">
-                <input type="file" multiple onChange={handleFileChange} />
-                <p className="text-xs text-slate-500 mt-2">
-                  PDFs, reports, certificates, etc.
-                </p>
+
+              <div className="relative border-2 border-dashed border-slate-300 rounded-2xl p-6 text-center bg-white hover:border-slate-400 transition">
+                <input
+                  type="file"
+                  multiple
+                  onChange={handleFileChange}
+                  className="absolute inset-0 opacity-0 cursor-pointer"
+                />
+
+                <div className="flex flex-col items-center gap-2">
+                  <div className="h-10 w-10 flex items-center justify-center rounded-full bg-slate-100 text-slate-700">
+                    📎
+                  </div>
+
+                  <p className="text-sm font-medium text-slate-700">
+                    Click to upload or drag & drop
+                  </p>
+
+                  <p className="text-xs text-slate-500">
+                    PDFs, reports, certificates (max 10MB)
+                  </p>
+                </div>
               </div>
+
               {files.length > 0 && (
-                <ul className="mt-3 space-y-1 text-sm text-slate-700">
+                <ul className="mt-4 space-y-2">
                   {files.map((file, idx) => (
-                    <li key={idx} className="flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-slate-800" />
-                      {file.name}
+                    <li
+                      key={idx}
+                      className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700"
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <span className="h-2 w-2 rounded-full bg-slate-800 shrink-0" />
+                        <span className="truncate">{file.name}</span>
+                      </div>
+                      <div
+                        onClick={() => {
+                          const filteredFiles = [];
+                          for (let i = 0; i < files.length; i++) {
+                            if (i != idx) filteredFiles.push(files[i]);
+                          }
+                          console.log(filteredFiles);
+                          setFiles(filteredFiles);
+                        }}
+                      >
+                        X
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -154,7 +303,7 @@ const Candidate = () => {
 
             <div className="mb-8">
               <label className="block text-sm font-medium text-slate-700 mb-2">
-                Links
+                Links (Optional)
               </label>
               <div className="space-y-3">
                 {links.map((link, idx) => (
@@ -204,12 +353,19 @@ const Candidate = () => {
                     data-testid="loader"
                   />
                 ) : (
-                  <div>Create Resume</div>
+                  <div>Create Asset</div>
                 )}
               </button>
             </div>
           </div>
         </div>
+      )}
+      {selectedResume && (
+        <ResumeViewModal
+          resume={selectedResume}
+          walletAddress={walletAddress}
+          onClose={() => setSelectedResume(null)}
+        />
       )}
     </div>
   );

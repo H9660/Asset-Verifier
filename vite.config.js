@@ -13,4 +13,8 @@ export default defineConfig({
       },
     },
   },
+  // this is the code that prevents the use of console i teh
+  // esbuild: {
+  //   drop: ["console", "debugger"],
+  // },
 });

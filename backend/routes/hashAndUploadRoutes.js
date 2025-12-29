@@ -7,7 +7,8 @@ import {
   getResumeHash,
   normalizeResumeName,
 } from "../utils/hashUtils.js";
-import { addProof, addResume } from "../index.js";
+import { addProof } from "../web3.js";
+import User from "../models/User.js";
 const router = express.Router();
 
 export const uploadFile = async (req, res) => {
@@ -19,7 +20,6 @@ export const uploadFile = async (req, res) => {
       return;
     }
     const file = req.file;
-
     const uploadResult = await pinata.upload.public.file(
       new File([file.buffer], file.originalname, {
         type: file.mimetype,
@@ -54,10 +54,12 @@ export const hashResume = async (req, res) => {
       return;
     }
 
-    const finalResumeHash = getResumeHash(resumeTitle, walletAddress);
-    const resumeId = getResumeHash(normalizeResumeName(resumeTitle), "");
+    const resumeId = getResumeHash(
+      normalizeResumeName(resumeTitle),
+      walletAddress
+    );
+
     res.status(200).json({
-      resumeHash: finalResumeHash,
       resumeId: resumeId,
     });
   } catch (err) {
@@ -80,30 +82,66 @@ export const uploadToBlockchain = async (req, res) => {
       });
       return;
     }
-    const resumeHashData = JSON.parse(req.body.resumeHashData);
+    const resumeId = JSON.parse(req.body.resumeId);
+    console.log(req.body);
     const proofs = JSON.parse(req.body.proofs);
     const uploadedProofs = await Promise.all(
-      proofs.map((proof) => addProof("0x" + proof.hash, proof.CID))
-    );
-
-    const proofsHashes = proofs.map((proof) => {
-      return "0x" + proof.hash;
-    });
-
-    const uploadedResume = await addResume(
-      "0x" + resumeHashData.resumeId,
-      "0x" + resumeHashData.resumeHash,
-      proofsHashes
+      proofs.map((proof) =>
+        addProof("0x" + resumeId, "0x" + proof.hash, proof.CID)
+      )
     );
 
     res.status(200).send({
       success: "Proofs deployed on the blockchain",
+      transactions: uploadedProofs,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
+
+export const uploadTransactionsToDB = async (req, res) => {
+  if (req.originalUrl !== "/upload/uploadTransactionsToDB") {
+    res.status(400).json({
+      error: "Invalid URL",
+    });
+    return;
+  }
+  try {
+    const transactionData = JSON.parse(req.body.transactionData);
+    const walletAddress = req.body.walletAddress;
+    console.log(walletAddress);
+    console.log(transactionData);
+    // if (existingUser) {
+    // existingUser.transactions = [
+    //   ...existingUser.transactions,
+    //   ...transactionData,
+    // ];   this can cause duplicate pushes so we do it in a better way
+    const upsertUser = await User.findOneAndUpdate(
+      { walletAddress },
+      {
+        $setOnInsert: { walletAddress },
+        $addToSet: {
+          transactions: transactionData,
+        },
+      },
+      { upsert: true, new: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      user: upsertUser,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error,
+    });
+  }
+};
+
 router.post("/uploadFile", upload.single("file"), uploadFile);
 router.post("/uploadToBlockchain", upload.none(), uploadToBlockchain);
+router.post("/uploadTransactionsToDB", upload.none(), uploadTransactionsToDB);
 router.post("/hashResume", upload.none(), hashResume);
 export default router;

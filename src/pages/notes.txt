@@ -1,0 +1,8 @@
+-> in my project If someone has my file and made some minor and unnoticle changes then sha will 
+change and they will upload the file.
+-> only 2 files that have the exact content can be protected.
+-> Another way to find files that have the similar content is to sort of revert
+the sha hash of all the files and then compare the actual content. But this is 
+not feasible.
+-> For now my system will only protect the same file being uploaded by some other user on
+the web. Exact files wont be published on teh same net twice. And thats it.
