@@ -1,7 +1,9 @@
-export const uploadFile = async (file) => {
-  // console.log("sdfsf");
+export const uploadFile = async (groupName, file) => {
   const formdata = new FormData();
+  console.log(groupName);
+  console.log(file);
   formdata.append("file", file);
+  formdata.append("groupName", groupName);
   const uploadStatus = await fetch(`/api/upload/uploadFile`, {
     method: "POST",
     body: formdata,
@@ -88,11 +90,12 @@ export const verify = async (walletAddress, proofHashData) => {
     if (result.success) {
       return {
         success: true,
+        similarProofs: result.similarProofs,
       };
     } else {
       return {
         success: false,
-        wrongProofs: result.wrongProofs,
+        error: result.error,
       };
     }
   } catch (err) {

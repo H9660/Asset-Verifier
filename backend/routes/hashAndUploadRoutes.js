@@ -1,6 +1,7 @@
 import express from "express";
 import pinata from "../config/pinata.js";
 import multer from "multer";
+import { groupNameToId } from "../utils/generalUtils.js";
 const upload = multer();
 import {
   hashFile,
@@ -19,12 +20,25 @@ export const uploadFile = async (req, res) => {
       });
       return;
     }
+
+    if (!req.file || !req.body.groupName) {
+      res.status(400).json({
+        success: false,
+        messsage: "File name or groupName is missing",
+      });
+      return;
+    }
+
     const file = req.file;
-    const uploadResult = await pinata.upload.public.file(
-      new File([file.buffer], file.originalname, {
-        type: file.mimetype,
-      })
-    );
+    const groupId = groupNameToId(req.body.groupName);
+    // console.log(file.buffer);
+    const uploadResult = await pinata.upload.public
+      .file(
+        new File([file.buffer], file.originalname, {
+          type: file.mimetype,
+        })
+      )
+      .group(groupId);
 
     const hash = await hashFile(file.buffer);
     res.status(200).json({
@@ -46,7 +60,6 @@ export const hashResume = async (req, res) => {
     }
     const resumeTitle = req.body.resumeTitle;
     const walletAddress = req.body.walletAddress;
-    console.log(resumeTitle);
     if (!resumeTitle || !walletAddress) {
       res.status(400).json({
         error: "Invalid resumetitle or walletAddress",

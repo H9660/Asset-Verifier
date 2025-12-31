@@ -5,7 +5,7 @@ const userSchema = new mongoose.Schema(
     walletAddress: {
       type: String,
       required: true,
-      unique: true, 
+      unique: true,
       index: true,
     },
 
@@ -14,8 +14,16 @@ const userSchema = new mongoose.Schema(
         resumeId: {
           type: String,
           required: true,
+          unique: true,
         },
-
+        name: {
+          type: String,
+          required: true,
+        },
+        groupName: {
+          type: String,
+          required: true,
+        },
         transactionId: {
           type: String,
           required: true,

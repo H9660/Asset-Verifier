@@ -1,4 +1,5 @@
 // components/ResumeBox.jsx
+import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "react-toastify";
 import { FiLink, FiCopy } from "react-icons/fi";
@@ -8,7 +9,8 @@ const shortenHash = (hash, start = 6, end = 4) => {
   return `${hash.slice(0, start)}...${hash.slice(-end)}`;
 };
 
-const ResumeBox = ({ resume, walletAddress, onView }) => {
+const ResumeBox = ({ resume, walletAddress, groupName, onView }) => {
+  const [groups, setGroups] = useState(["Techinal", "Artwork", "Financial"]);
   const handleGenerateLink = async () => {
     if (!walletAddress) {
       toast.error("Wallet address not available");

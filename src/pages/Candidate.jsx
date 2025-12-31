@@ -14,6 +14,7 @@ import { ClipLoader } from "react-spinners";
 import { toastSetup } from "../config/toastSetup";
 const Candidate = () => {
   const navigate = useNavigate();
+  const [groupName, setGroupName] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [resumeTitle, setResumeTitle] = useState("");
   const [files, setFiles] = useState([]);
@@ -85,7 +86,9 @@ const Candidate = () => {
     try {
       setUploading(true);
       // so this fires all the calls at once and saves times
-      const proofs = await Promise.all(files.map((file) => uploadFile(file)));
+      const proofs = await Promise.all(
+        files.map((file) => uploadFile(groupName, file))
+      );
 
       setPinataFileData(proofs);
 
@@ -96,6 +99,7 @@ const Candidate = () => {
           owner: walletAddress,
           cid: proof.CID,
           proofHash: "0x" + proof.hash,
+          groupName: groupName,
         };
       });
 
@@ -105,7 +109,6 @@ const Candidate = () => {
         "0x" + resumeId,
         uploadData
       );
-      console.log(walletAddress);
 
       if (transactionStatus.success) {
         toast.success("All proofs uploaded to blockchain!", toastSetup);
@@ -122,10 +125,11 @@ const Candidate = () => {
         transactionData: {
           transactionId: transactionStatus.transactionId,
           resumeId: resumeId,
+          name: resumeTitle,
+          groupName: groupName,
         },
       });
 
-      console.log(walletAddress);
       if (saveToDB.success) {
         console.log(saveToDB);
         toast.success("Resume created successfully", toastSetup);
@@ -145,12 +149,6 @@ const Candidate = () => {
       window.location.reload();
     });
   }, []);
-
-  useEffect(() => {
-    (async () => {
-      if (walletAddress) await fetchResumes();
-    })();
-  }, [files]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-10">
@@ -230,20 +228,32 @@ const Candidate = () => {
             <h2 className="text-2xl font-semibold text-slate-800 mb-6">
               Store Assets
             </h2>
-
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Asset name
-              </label>
-              <input
-                type="text"
-                placeholder="Abstract Artwork by Hussain"
-                value={resumeTitle}
-                onChange={(e) => setResumeTitle(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-slate-800"
-              />
+            <div className="flex grid grid-cols-3 gap-x-8 justify-between">
+              <div className="col-span-2 mb-6">
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Asset name
+                </label>
+                <input
+                  type="text"
+                  placeholder="Abstract Artwork by Hussain"
+                  value={resumeTitle}
+                  onChange={(e) => setResumeTitle(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-slate-800"
+                />
+              </div>
+              <div>
+                <label for="groups">Group</label>
+                <select
+                  name="groups"
+                  id="groups"
+                  onChange={(e) => setGroupName(e.target.value)}
+                >
+                  <option value="Finance">Finance</option>
+                  <option value="Art">Art</option>
+                  <option value="Technical">Technical</option>
+                </select>
+              </div>
             </div>
-
             <div className="mb-6">
               <label className="block text-sm font-medium text-slate-700 mb-2">
                 Upload files
@@ -283,13 +293,13 @@ const Candidate = () => {
                         <span className="h-2 w-2 rounded-full bg-slate-800 shrink-0" />
                         <span className="truncate">{file.name}</span>
                       </div>
+
                       <div
                         onClick={() => {
                           const filteredFiles = [];
                           for (let i = 0; i < files.length; i++) {
                             if (i != idx) filteredFiles.push(files[i]);
                           }
-                          console.log(filteredFiles);
                           setFiles(filteredFiles);
                         }}
                       >
