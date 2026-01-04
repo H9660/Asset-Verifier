@@ -18,10 +18,6 @@ export const connectWallet = async () => {
         return web3.utils.toChecksumAddress(address);
       });
 
-      // window.ethereum.on("disconnect", (error) => {
-      //   console.warn("MetaMask disconnected", error);
-      //   window.location.reload();
-      // });
       console.log(actualAddressArray);
       return {
         address: actualAddressArray[0],
@@ -122,11 +118,12 @@ export const verifyResume = async (transactionId, walletAddress) => {
     if (res.success) {
       return {
         success: true,
+        similarProofs: res.similarProofs,
       };
     } else
       return {
         success: false,
-        wrongProofs: res.wrongProofs,
+        error: res.error,
       };
   } catch (error) {
     return {

@@ -1,60 +1,79 @@
-// pages/Verify.jsx
 import { toastSetup } from "../config/toastSetup";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { toast } from "react-toastify";
 import { ClipLoader } from "react-spinners";
-import { verifyResume } from "../services/web3"; // you’ll implement this
+import { verifyResume } from "../services/web3";
+
+/* ---------------- helpers ---------------- */
 
 const parseResumeLink = (url) => {
   try {
     const parsed = new URL(url);
     const parts = parsed.pathname.split("/").filter(Boolean);
+
     if (parts[0] !== "asset") {
       toast.error("Invalid resume url", toastSetup);
-      return;
+      return null;
     }
 
-    // 7f504d3ffb81a591233ceab52dac39a3fe3626744ba0d04e29c43e28126326d2
-    console.log(new URL(url).searchParams.get("wallet"));
     return {
       transactionId: parts[1],
       walletAddress: parsed.searchParams.get("wallet"),
     };
-  } catch (error) {
-    console.log(error);
+  } catch {
     return null;
   }
 };
+
+const normalizeSimilarProofs = (similarProofs = []) => {
+  const map = {};
+
+  similarProofs.flat().forEach(({ currCID, cid, simPercentage }) => {
+    if (!map[currCID]) map[currCID] = [];
+    map[currCID].push({
+      cid,
+      simPercentage: Math.round(simPercentage * 100),
+    });
+  });
+
+  return map;
+};
+
+/* ---------------- component ---------------- */
 
 function Verify() {
   const [resumeLink, setResumeLink] = useState("");
   const [verifying, setVerifying] = useState(false);
   const [result, setResult] = useState(null);
-  const [wrongProofs, setWrongProofs] = useState([]);
+  const [similarMap, setSimilarMap] = useState(null);
+
   const navigate = useNavigate();
+
   const handleVerify = async () => {
-    console.log(resumeLink);
     const parsed = parseResumeLink(resumeLink);
     if (!parsed) {
-      toast.error("Invalid asset link");
+      toast.error("Invalid asset link", toastSetup);
       return;
     }
 
     setVerifying(true);
     setResult(null);
+    setSimilarMap(null);
 
     try {
-      console.log(parsed.walletAddress);
       const verificationResult = await verifyResume(
         parsed.transactionId,
         parsed.walletAddress
       );
 
-      console.log(verificationResult);
       setResult(verificationResult);
+
+      if (verificationResult?.success && verificationResult?.similarProofs) {
+        setSimilarMap(normalizeSimilarProofs(verificationResult.similarProofs));
+      }
     } catch (err) {
-      toast.error(err.message || "Verification failed");
+      toast.error(err.message || "Verification failed", toastSetup);
     } finally {
       setVerifying(false);
     }
@@ -62,9 +81,9 @@ function Verify() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-6">
-      <div className="bg-white w-full max-w-xl rounded-2xl shadow-xl p-8">
+      <div className="bg-white w-full max-w-2xl rounded-2xl shadow-xl p-8">
         <h1 className="text-2xl font-bold text-slate-800 mb-6">
-          Verify an asset
+          Verify an Asset
         </h1>
 
         <input
@@ -74,24 +93,26 @@ function Verify() {
           onChange={(e) => setResumeLink(e.target.value)}
           className="w-full rounded-lg border border-slate-300 px-4 py-3 mb-4 focus:outline-none focus:ring-2 focus:ring-slate-800"
         />
-        <div className="flex justify-between">
+
+        <div className="flex gap-4">
           <button
-            onClick={() => {
-              navigate("/candidate");
-            }}
+            onClick={() => navigate("/candidate")}
             disabled={verifying}
-            className="w-50 py-3 rounded-lg bg-slate-900 text-center text-white font-medium hover:bg-slate-800 disabled:opacity-60"
+            className="flex-1 py-3 rounded-lg bg-slate-200 text-slate-800 font-medium hover:bg-slate-300 disabled:opacity-60"
           >
             Create Asset
           </button>
+
           <button
             onClick={handleVerify}
             disabled={verifying}
-            className="w-50 py-3 rounded-lg bg-slate-900 text-center text-white font-medium hover:bg-slate-800 disabled:opacity-60"
+            className="flex-1 py-3 rounded-lg bg-slate-900 text-white font-medium hover:bg-slate-800 disabled:opacity-60 flex items-center justify-center"
           >
-            {verifying ? <ClipLoader size={20} color="white" /> : "Verify"}
+            {verifying ? <ClipLoader size={18} color="white" /> : "Verify"}
           </button>
         </div>
+
+        {/* ---------- status message ---------- */}
         {result && (
           <div
             className={`mt-6 p-4 rounded-lg text-sm ${
@@ -101,8 +122,51 @@ function Verify() {
             }`}
           >
             {result.success
-              ? "✅ Asset and its related documents are authentic and verified"
+              ? "✅ Asset and related documents verified"
               : result.error}
+          </div>
+        )}
+
+        {similarMap && (
+          <div className="mt-8 space-y-5">
+            <h2 className="text-lg font-semibold text-slate-800">
+              Similarity Report
+            </h2>
+
+            {Object.entries(similarMap).map(([currCID, matches]) => (
+              <div
+                key={currCID}
+                className="border border-slate-200 rounded-xl p-4 bg-slate-50"
+              >
+                <p className="text-xs text-slate-500 mb-1">Current CID</p>
+                <p className="text-sm font-mono break-all text-slate-800 mb-3">
+                  {currCID}
+                </p>
+
+                <div className="space-y-2">
+                  {matches.map(({ cid, simPercentage }) => (
+                    <div
+                      key={cid}
+                      className="flex items-center justify-between bg-white border rounded-lg px-3 py-2"
+                    >
+                      <p className="text-xs font-mono break-all text-slate-700 w-4/5">
+                        {cid}
+                      </p>
+
+                      <span
+                        className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                          simPercentage >= 90
+                            ? "bg-red-100 text-red-700"
+                            : "bg-yellow-100 text-yellow-700"
+                        }`}
+                      >
+                        {simPercentage}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>

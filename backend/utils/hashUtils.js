@@ -1,26 +1,11 @@
 // import { resumeRegex } from "../constants.js";
 import { Worker } from "worker_threads";
 import crypto from "crypto";
-export const resumeRegexString = `^(?:(?:resume|cv)[-_ ]*)?(?<name>[a-z]+(?:[-_ ]+[a-z]+)*)?(?:[-_ ]*\\d*)?\\.pdf$`;
+export const resumeRegexString = `^(?:(?:resume|cv)[-_ ]*)?(?<name>[a-z]+(?:[-_ ]+[a-z]+)*)?(?:[-_ ]*\\d*)?\\$`;
 
-const resumeRegex = new RegExp(resumeRegexString, "i");
-
+const chunksize = process.env.COMPARE_CHUNK_SIZE;
 export const normalizeResumeName = (resumeName) => {
-  const match = resumeName.match(resumeRegex);
-  console.log(match);
-  if (!match) {
-    throw new Error("Invalid resume filename");
-  }
-
-  const name = match.groups?.name;
-
-  // Generic resumes → resume.pdf
-  if (!name) {
-    return "resume.pdf";
-  }
-
-  // Normalize person name
-  return name.toLowerCase().trim().replace(/[_ ]+/g, "-") + ".pdf" + Date.now();
+  return resumeName.trim().toLowerCase().replace(/\s+/g, "-");
 };
 
 export const hashFile = async (buffer) => {
@@ -35,6 +20,28 @@ export const hashFile = async (buffer) => {
       }
     });
   });
+};
+
+const getChunks = (buffer, chunkSize = chunksize) => {
+  const hashes = [];
+  for (let i = 0; i < buffer.length; i += chunkSize) {
+    const chunk = buffer.slice(i, i + chunkSize);
+    const hash = crypto.createHash("sha256").update(chunk).digest("hex");
+    hashes.push(hash);
+  }
+  return hashes;
+};
+
+export const compareChunkWise = (buffer1, buffer2) => {
+  const hA = getChunks(buffer1);
+  const hB = new Set(getChunks(buffer2));
+
+  let matches = 0;
+  for (const h of hA) {
+    if (hB.has(h)) matches++;
+  }
+
+  return matches / Math.max(hA.length, hB.size);
 };
 
 export const getResumeHash = (name, address) => {
