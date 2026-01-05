@@ -1,4 +1,3 @@
-import Web3 from "web3";
 import { initContractInstance } from "./utils/web3Utils.js";
 // const web3 = new Web3(new Web3.providers.HttpProvider(process.env.TEST));
 

@@ -4,6 +4,9 @@ import fetchRoutes from "./routes/fetchRoutes.js";
 import verifyRoutes from "./routes/verifyRoutes.js";
 import dotenv from "dotenv";
 import { connectDB, disconnectDb } from "./config/db.js";
+import { File } from "@web-std/file";
+import { provider } from "./utils/web3Utils.js";
+globalThis.File = File;
 
 dotenv.config();
 const conn = await connectDB();
@@ -31,4 +34,7 @@ process.on("SIGINT", async () => {
     server.close(() => {
       console.log("Server shut down.");
     });
+
+  console.log("Closing the provider engine.");
+  provider?.engine.stop(); // optinal chaininig here ? because if provider is missing then dont go ahead
 });

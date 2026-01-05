@@ -24,6 +24,7 @@ export const hashFile = async (buffer) => {
 
 const getChunks = (buffer, chunkSize = chunksize) => {
   const hashes = [];
+
   for (let i = 0; i < buffer.length; i += chunkSize) {
     const chunk = buffer.slice(i, i + chunkSize);
     const hash = crypto.createHash("sha256").update(chunk).digest("hex");
